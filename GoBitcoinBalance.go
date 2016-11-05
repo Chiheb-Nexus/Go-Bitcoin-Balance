@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -48,7 +49,7 @@ type ResponseLastTxs struct {
 	Confirmations int64   `json:confirmations"`
 }
 
-func FetchUrlByte(url string) []byte {
+func FetchUrlByte(url string, user_agent string) []byte {
 
 	client := &http.Client{}
 	request, err := http.NewRequest("GET", url, nil)
@@ -57,8 +58,7 @@ func FetchUrlByte(url string) []byte {
 		log.Fatal("Error while fetching url\n", err)
 	}
 
-	request.Header.Set("User-Agent", `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) 
-									Ubuntu Chromium/53.0.2785.143 Chrome/53.0.2785.143 Safari/537.36`)
+	request.Header.Set("User-Agent", user_agent)
 	response, err := client.Do(request)
 	if err != nil {
 		log.Fatal("Error while trying to get response\n", err)
@@ -77,8 +77,8 @@ func FetchUrlByte(url string) []byte {
 	return body
 }
 
-func LoadJsonFromUrl(url string) Response {
-	body := FetchUrlByte(url)
+func LoadJsonFromUrl(url string, user_agent string) Response {
+	body := FetchUrlByte(url, user_agent)
 	res := Response{}
 	err := json.Unmarshal(body, &res)
 	if err != nil {
@@ -96,11 +96,27 @@ func ReadFromFile(path string) []string {
 	return strings.Split(string(data), "\n")
 }
 
+func GetOSName() string {
+	return runtime.GOOS
+}
+
 func main() {
+
 	if len(os.Args) > 2 || len(os.Args) < 2 {
 		log.Fatal(`
 		This current script accept only one argument.
-		Usage: ./GoBitcoinBalance addresses_path`)
+		Usage: ./GoCheckBitcoinAddress addresses_path`)
+	}
+
+	var user_agent string
+
+	switch GetOSName() {
+	case "linux":
+		user_agent = `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/53.0.2785.143 Chrome/53.0.2785.143 Safari/537.36`
+	case "windows":
+		user_agent = `Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.143 Safari/537.36`
+	case "mac":
+		user_agent = `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.143 Safari/537.36`
 	}
 
 	data := ReadFromFile(os.Args[1])
@@ -116,7 +132,7 @@ func main() {
 			continue
 		} else {
 			url := explorer + value
-			res := LoadJsonFromUrl(url)
+			res := LoadJsonFromUrl(url, user_agent)
 			fmt.Printf("\033[92m%s\033[0m\t\033[95m%.8f\tBTC\033[0m\t\tETA(%%): %.2f\n", res.Data.Address, res.Data.Balance, float64(j*100/length))
 			if i == 5 {
 				time.Sleep(1000 * time.Millisecond) // Wait 1s in order to escape Blockr.io's API restriction
